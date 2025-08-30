@@ -160,7 +160,7 @@ Note: At this stage, only the `mppi_eval_msgs` and `groundtruth_odom_publisher` 
 1. [Inside the docker container] Build the project.
     ```
     cd ~/mppi_swerve_drive_ros
-    make build
+    make build_humble
     ```
 
 </details>
@@ -196,7 +196,7 @@ Note: At this stage, only the `mppi_eval_msgs` and `groundtruth_odom_publisher` 
 1. Build the project.
     ```
     cd <path to your workspace>/mppi_swerve_drive_ros
-    make build
+    make build_noetic
     ```
 
 </details>  
@@ -204,13 +204,19 @@ Note: At this stage, only the `mppi_eval_msgs` and `groundtruth_odom_publisher` 
 
 ## Build
 
-Build the project.
+### ROS 2 Humble
 ```
 cd <path to your workspace>/mppi_swerve_drive_ros
-make build
+make build_humble
 ```
 
-(Optional) Clean the cache before building the project if necessary.
+### ROS 1 Noetic
+```
+cd <path to your workspace>/mppi_swerve_drive_ros
+make build_noetic
+```
+
+(Optional) Clean the cache
 ```
 cd <path to your workspace>/mppi_swerve_drive_ros
 make clean

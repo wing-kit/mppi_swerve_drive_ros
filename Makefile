@@ -5,14 +5,20 @@ WORKSPACE=$(shell pwd)
 .PHONY: build # to avoid error
 
 build:
-	@if [ -f install/setup.bash ]; then \
-		source /opt/ros/humble/setup.bash && \
-		colcon build --symlink-install; \
-	else \
-		echo "No colcon workspace yet. Creating..."; \
-		source /opt/ros/humble/setup.bash && \
-		colcon build --symlink-install; \
-	fi
+	@echo "Building with ROS 2 Humble (colcon)"
+	@source /opt/ros/humble/setup.bash && \
+	colcon build --symlink-install
+
+build_humble:
+	@echo "Building with ROS 2 Humble (colcon)"
+	@source /opt/ros/humble/setup.bash && \
+	colcon build --symlink-install
+
+build_noetic:
+	@echo "Building with ROS 1 Noetic (catkin)"
+	@source /opt/ros/noetic/setup.bash && \
+	export CC=clang-11 && export CXX=clang++-11 && \
+	catkin build --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O2"
 
 clean:
 	rm -rf build install log .catkin_tools devel logs
