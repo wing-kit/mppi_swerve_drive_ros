@@ -1,11 +1,12 @@
 #include "mppi_h/mppi_h.hpp"
+using std::placeholders::_1;
 
 namespace controller_mppi_h
 {
 
 // constructor
 MPPI::MPPI()
-    : nh_(""), private_nh_("~")
+    : rclcpp::Node("mppi_h")
 {
     // load parameters
     param::CommonParam param_common; // common parameters managed by mppi_h
@@ -13,113 +14,140 @@ MPPI::MPPI()
     param::MPPI4DParam param_mode2; // parameters for mode two
 
     //// navigation
-    private_nh_.param<double>("navigation/xy_goal_tolerance", param_common.navigation.xy_goal_tolerance, 0.5); // [m]
-    private_nh_.param<double>("navigation/yaw_goal_tolerance", param_common.navigation.yaw_goal_tolerance, 0.5); // [rad]
+    this->declare_parameter<double>("navigation/xy_goal_tolerance", 0.5);
+    this->declare_parameter<double>("navigation/yaw_goal_tolerance", 0.5);
+    param_common.navigation.xy_goal_tolerance = this->get_parameter("navigation/xy_goal_tolerance").as_double();
+    param_common.navigation.yaw_goal_tolerance = this->get_parameter("navigation/yaw_goal_tolerance").as_double();
     
     //// target_system
-    private_nh_.param<double>("target_system/l_f", param_common.target_system.l_f, 0.5); // [m]
-    private_nh_.param<double>("target_system/l_r", param_common.target_system.l_r, 0.5); // [m]
-    private_nh_.param<double>("target_system/d_l", param_common.target_system.d_l, 0.5); // [m]
-    private_nh_.param<double>("target_system/d_r", param_common.target_system.d_r, 0.5); // [m]
-    private_nh_.param<double>("target_system/tire_radius", param_common.target_system.tire_radius, 0.2); // [m]
+    this->declare_parameter<double>("target_system/l_f", 0.5);
+    this->declare_parameter<double>("target_system/l_r", 0.5);
+    this->declare_parameter<double>("target_system/d_l", 0.5);
+    this->declare_parameter<double>("target_system/d_r", 0.5);
+    this->declare_parameter<double>("target_system/tire_radius", 0.2);
+    param_common.target_system.l_f = this->get_parameter("target_system/l_f").as_double();
+    param_common.target_system.l_r = this->get_parameter("target_system/l_r").as_double();
+    param_common.target_system.d_l = this->get_parameter("target_system/d_l").as_double();
+    param_common.target_system.d_r = this->get_parameter("target_system/d_r").as_double();
+    param_common.target_system.tire_radius = this->get_parameter("target_system/tire_radius").as_double();
 
     //// mode_selector
-    private_nh_.param<double>("mode_selector/yaw_error_threshold", param_common.mode_selector.yaw_error_threshold, 0.3); // [rad]
-    private_nh_.param<double>("mode_selector/dist_error_threshold", param_common.mode_selector.dist_error_threshold, 0.3); // [m]
+    this->declare_parameter<double>("mode_selector/yaw_error_threshold", 0.3);
+    this->declare_parameter<double>("mode_selector/dist_error_threshold", 0.3);
+    param_common.mode_selector.yaw_error_threshold = this->get_parameter("mode_selector/yaw_error_threshold").as_double();
+    param_common.mode_selector.dist_error_threshold = this->get_parameter("mode_selector/dist_error_threshold").as_double();
 
     //// controller [common]
-    private_nh_.param<double>("controller/common/control_interval", param_common.controller.control_interval, 0.05); // [s]
-    private_nh_.param<int>("controller/common/prediction_horizon", param_common.controller.prediction_horizon, 30); // prediction horizon steps
-    private_nh_.param<double>("controller/common/step_len_sec", param_common.controller.step_len_sec, 0.033); // step length [sec]
+    this->declare_parameter<double>("controller/common/control_interval", 0.05);
+    this->declare_parameter<int>("controller/common/prediction_horizon", 30);
+    this->declare_parameter<double>("controller/common/step_len_sec", 0.033);
+    param_common.controller.control_interval = this->get_parameter("controller/common/control_interval").as_double();
+    param_common.controller.prediction_horizon = this->get_parameter("controller/common/prediction_horizon").as_int();
+    param_common.controller.step_len_sec = this->get_parameter("controller/common/step_len_sec").as_double();
 
     //// controller [mode one]
-    private_nh_.param<std::string>("controller/mode1/name", param_mode1.controller.name, "mppi_3d");
-    private_nh_.param<int>("controller/mode1/num_samples", param_mode1.controller.num_samples, 3000); // number of samples
-    private_nh_.param<double>("controller/mode1/param_exploration", param_mode1.controller.param_exploration, 0.1); // 0.0 ~ 1.0
-    private_nh_.param<double>("controller/mode1/param_lambda", param_mode1.controller.param_lambda, 0.1);
-    private_nh_.param<double>("controller/mode1/param_alpha", param_mode1.controller.param_alpha, 0.1);
-    private_nh_.param<std::vector<double>>("controller/mode1/sigma", param_mode1.controller.sigma, {1.0, 1.0, 0.78}); // for {vx, vy, yawrate} in this order
-    private_nh_.param<bool>("controller/mode1/reduce_computation", param_mode1.controller.reduce_computation, false);  
-    private_nh_.param<std::vector<double>>("controller/mode1/weight_cmd_change", param_mode1.controller.weight_cmd_change, {0.0, 0.0, 0.0}); // for {vx, vy, yawrate} in this order
-    private_nh_.param<std::vector<double>>("controller/mode1/weight_vehicle_cmd_change", param_mode1.controller.weight_vehicle_cmd_change, {1.4, 1.4, 1.4, 1.4, 0.1, 0.1, 0.1, 0.1}); // mid
-    private_nh_.param<double>("controller/mode1/ref_velocity", param_mode1.controller.ref_velocity, 2.0); // [m/s]
-    private_nh_.param<double>("controller/mode1/weight_velocity_error", param_mode1.controller.weight_velocity_error, 10.0);
-    private_nh_.param<double>("controller/mode1/weight_angular_error", param_mode1.controller.weight_angular_error, 30.0);
-    private_nh_.param<double>("controller/mode1/weight_collision_penalty", param_mode1.controller.weight_collision_penalty, 50.0);
-    private_nh_.param<double>("controller/mode1/weight_distance_error_penalty", param_mode1.controller.weight_distance_error_penalty, 40.0);
-    private_nh_.param<double>("controller/mode1/weight_terminal_state_penalty", param_mode1.controller.weight_terminal_state_penalty, 50.0);
-    private_nh_.param<bool>("controller/mode1/use_sg_filter", param_mode1.controller.use_sg_filter, true);
-    private_nh_.param<int>("controller/mode1/sg_filter_half_window_size", param_mode1.controller.sg_filter_half_window_size, 10);
-    private_nh_.param<int>("controller/mode1/sg_filter_poly_order", param_mode1.controller.sg_filter_poly_order, 3);
+    this->declare_parameter<std::string>("controller/mode1/name", "mppi_3d");
+    this->declare_parameter<int>("controller/mode1/num_samples", 3000);
+    this->declare_parameter<double>("controller/mode1/param_exploration", 0.1);
+    this->declare_parameter<double>("controller/mode1/param_lambda", 0.1);
+    this->declare_parameter<double>("controller/mode1/param_alpha", 0.1);
+    this->declare_parameter<std::vector<double>>("controller/mode1/sigma", {1.0, 1.0, 0.78});
+    this->declare_parameter<bool>("controller/mode1/reduce_computation", false);
+    this->declare_parameter<std::vector<double>>("controller/mode1/weight_cmd_change", {0.0, 0.0, 0.0});
+    this->declare_parameter<std::vector<double>>("controller/mode1/weight_vehicle_cmd_change", {1.4, 1.4, 1.4, 1.4, 0.1, 0.1, 0.1, 0.1});
+    this->declare_parameter<double>("controller/mode1/ref_velocity", 2.0);
+    this->declare_parameter<double>("controller/mode1/weight_velocity_error", 10.0);
+    this->declare_parameter<double>("controller/mode1/weight_angular_error", 30.0);
+    this->declare_parameter<double>("controller/mode1/weight_collision_penalty", 50.0);
+    this->declare_parameter<double>("controller/mode1/weight_distance_error_penalty", 40.0);
+    this->declare_parameter<double>("controller/mode1/weight_terminal_state_penalty", 50.0);
+    this->declare_parameter<bool>("controller/mode1/use_sg_filter", true);
+    this->declare_parameter<int>("controller/mode1/sg_filter_half_window_size", 10);
+    this->declare_parameter<int>("controller/mode1/sg_filter_poly_order", 3);
 
     //// controller [mode two]
-    private_nh_.param<std::string>("controller/mode2/name", param_mode2.controller.name, "mppi_4d");
-    private_nh_.param<int>("controller/mode2/num_samples", param_mode2.controller.num_samples, 3000); // number of samples
-    private_nh_.param<double>("controller/mode2/param_exploration", param_mode2.controller.param_exploration, 0.1); // 0.0 ~ 1.0
-    private_nh_.param<double>("controller/mode2/param_lambda", param_mode2.controller.param_lambda, 0.1);
-    private_nh_.param<double>("controller/mode2/param_alpha", param_mode2.controller.param_alpha, 0.1);
-    private_nh_.param<std::vector<double>>("controller/mode2/sigma", param_mode2.controller.sigma, {1.0, 1.0, 0.78}); // for {vx, vy, yawrate} in this order
-    private_nh_.param<bool>("controller/mode2/reduce_computation", param_mode2.controller.reduce_computation, false);  
-    private_nh_.param<std::vector<double>>("controller/mode2/weight_cmd_change", param_mode2.controller.weight_cmd_change, {0.0, 0.0, 0.0}); // for {vx, vy, yawrate} in this order
-    private_nh_.param<std::vector<double>>("controller/mode2/weight_vehicle_cmd_change", param_mode2.controller.weight_vehicle_cmd_change, {1.4, 1.4, 1.4, 1.4, 0.1, 0.1, 0.1, 0.1}); // mid
-    private_nh_.param<double>("controller/mode2/ref_velocity", param_mode2.controller.ref_velocity, 2.0); // [m/s]
-    private_nh_.param<double>("controller/mode2/weight_velocity_error", param_mode2.controller.weight_velocity_error, 10.0);
-    private_nh_.param<double>("controller/mode2/weight_angular_error", param_mode2.controller.weight_angular_error, 30.0);
-    private_nh_.param<double>("controller/mode2/weight_collision_penalty", param_mode2.controller.weight_collision_penalty, 50.0);
-    private_nh_.param<double>("controller/mode2/weight_distance_error_penalty", param_mode2.controller.weight_distance_error_penalty, 40.0);
-    private_nh_.param<double>("controller/mode2/weight_terminal_state_penalty", param_mode2.controller.weight_terminal_state_penalty, 50.0);
-    private_nh_.param<bool>("controller/mode2/use_sg_filter", param_mode2.controller.use_sg_filter, true);
-    private_nh_.param<int>("controller/mode2/sg_filter_half_window_size", param_mode2.controller.sg_filter_half_window_size, 10);
-    private_nh_.param<int>("controller/mode2/sg_filter_poly_order", param_mode2.controller.sg_filter_poly_order, 3);
+    this->declare_parameter<std::string>("controller/mode2/name", "mppi_4d");
+    this->declare_parameter<int>("controller/mode2/num_samples", 3000);
+    this->declare_parameter<double>("controller/mode2/param_exploration", 0.1);
+    this->declare_parameter<double>("controller/mode2/param_lambda", 0.1);
+    this->declare_parameter<double>("controller/mode2/param_alpha", 0.1);
+    this->declare_parameter<std::vector<double>>("controller/mode2/sigma", {1.0, 1.0, 0.78});
+    this->declare_parameter<bool>("controller/mode2/reduce_computation", false);
+    this->declare_parameter<std::vector<double>>("controller/mode2/weight_cmd_change", {0.0, 0.0, 0.0});
+    this->declare_parameter<std::vector<double>>("controller/mode2/weight_vehicle_cmd_change", {1.4, 1.4, 1.4, 1.4, 0.1, 0.1, 0.1, 0.1});
+    this->declare_parameter<double>("controller/mode2/ref_velocity", 2.0);
+    this->declare_parameter<double>("controller/mode2/weight_velocity_error", 10.0);
+    this->declare_parameter<double>("controller/mode2/weight_angular_error", 30.0);
+    this->declare_parameter<double>("controller/mode2/weight_collision_penalty", 50.0);
+    this->declare_parameter<double>("controller/mode2/weight_distance_error_penalty", 40.0);
+    this->declare_parameter<double>("controller/mode2/weight_terminal_state_penalty", 50.0);
+    this->declare_parameter<bool>("controller/mode2/use_sg_filter", true);
+    this->declare_parameter<int>("controller/mode2/sg_filter_half_window_size", 10);
+    this->declare_parameter<int>("controller/mode2/sg_filter_poly_order", 3);
 
     //// subscribing topic names
     std::string odom_topic, ref_path_topic, collision_costmap_topic, distance_error_map_topic, ref_yaw_map_topic;
-    private_nh_.param<std::string>("odom_topic", odom_topic, "/groundtruth_odom");
-    private_nh_.param<std::string>("ref_path_topic", ref_path_topic, "/move_base/NavfnROS/plan");
-    private_nh_.param<std::string>("collision_costmap_topic", collision_costmap_topic, "/move_base/local_costmap/costmap");
-    private_nh_.param<std::string>("distance_error_map_topic", distance_error_map_topic, "/distance_error_map");
-    private_nh_.param<std::string>("ref_yaw_map_topic", ref_yaw_map_topic, "/ref_yaw_map");
+    this->declare_parameter<std::string>("odom_topic", "/groundtruth_odom");
+    this->declare_parameter<std::string>("ref_path_topic", "/move_base/NavfnROS/plan");
+    this->declare_parameter<std::string>("collision_costmap_topic", "/move_base/local_costmap/costmap");
+    this->declare_parameter<std::string>("distance_error_map_topic", "/distance_error_map");
+    this->declare_parameter<std::string>("ref_yaw_map_topic", "/ref_yaw_map");
+    odom_topic = this->get_parameter("odom_topic").as_string();
+    ref_path_topic = this->get_parameter("ref_path_topic").as_string();
+    collision_costmap_topic = this->get_parameter("collision_costmap_topic").as_string();
+    distance_error_map_topic = this->get_parameter("distance_error_map_topic").as_string();
+    ref_yaw_map_topic = this->get_parameter("ref_yaw_map_topic").as_string();
 
     //// publishing topic names
     std::string control_cmd_vel_topic, mppi_absvel_topic, mppi_vx_topic, mppi_vy_topic, mppi_omega_topic, \
     calc_time_topic, mppi_optimal_traj_topic, mppi_sampled_traj_topic, mppi_overlay_text_topic, mppi_eval_msg_topic;
-    private_nh_.param<std::string>("control_cmd_vel_topic", control_cmd_vel_topic, "/cmd_vel");
-    private_nh_.param<std::string>("mppi_absvel_topic", mppi_absvel_topic, "/mppi/cmd/absvel");
-    private_nh_.param<std::string>("mppi_vx_topic", mppi_vx_topic, "/mppi/cmd/vx");
-    private_nh_.param<std::string>("mppi_vy_topic", mppi_vy_topic, "/mppi/cmd/vy");
-    private_nh_.param<std::string>("mppi_omega_topic", mppi_omega_topic, "/mppi/cmd/omega");
-    private_nh_.param<std::string>("calc_time_topic", calc_time_topic, "/mppi/calc_time");
-    private_nh_.param<std::string>("mppi_overlay_text_topic", mppi_overlay_text_topic, "/mppi/overlay_text");
-    private_nh_.param<std::string>("mppi_optimal_traj_topic", mppi_optimal_traj_topic, "/mppi/optimal_traj");
-    private_nh_.param<std::string>("mppi_sampled_traj_topic", mppi_sampled_traj_topic, "/mppi/sampled_traj");
-    private_nh_.param<std::string>("mppi_eval_msg_topic", mppi_eval_msg_topic, "/mppi/eval_info");
+    this->declare_parameter<std::string>("control_cmd_vel_topic", "/cmd_vel");
+    this->declare_parameter<std::string>("mppi_absvel_topic", "/mppi/cmd/absvel");
+    this->declare_parameter<std::string>("mppi_vx_topic", "/mppi/cmd/vx");
+    this->declare_parameter<std::string>("mppi_vy_topic", "/mppi/cmd/vy");
+    this->declare_parameter<std::string>("mppi_omega_topic", "/mppi/cmd/omega");
+    this->declare_parameter<std::string>("calc_time_topic", "/mppi/calc_time");
+    this->declare_parameter<std::string>("mppi_overlay_text_topic", "/mppi/overlay_text");
+    this->declare_parameter<std::string>("mppi_optimal_traj_topic", "/mppi/optimal_traj");
+    this->declare_parameter<std::string>("mppi_sampled_traj_topic", "/mppi/sampled_traj");
+    this->declare_parameter<std::string>("mppi_eval_msg_topic", "/mppi/eval_info");
+    control_cmd_vel_topic = this->get_parameter("control_cmd_vel_topic").as_string();
+    mppi_absvel_topic = this->get_parameter("mppi_absvel_topic").as_string();
+    mppi_vx_topic = this->get_parameter("mppi_vx_topic").as_string();
+    mppi_vy_topic = this->get_parameter("mppi_vy_topic").as_string();
+    mppi_omega_topic = this->get_parameter("mppi_omega_topic").as_string();
+    calc_time_topic = this->get_parameter("calc_time_topic").as_string();
+    mppi_overlay_text_topic = this->get_parameter("mppi_overlay_text_topic").as_string();
+    mppi_optimal_traj_topic = this->get_parameter("mppi_optimal_traj_topic").as_string();
+    mppi_sampled_traj_topic = this->get_parameter("mppi_sampled_traj_topic").as_string();
+    mppi_eval_msg_topic = this->get_parameter("mppi_eval_msg_topic").as_string();
 
     // initialize subscribers
-    sub_odom_ = nh_.subscribe(odom_topic, 1, &MPPI::odomCallback, this);
+    sub_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(odom_topic, rclcpp::QoS(10), std::bind(&MPPI::odomCallback, this, _1));
     odom_received_ = false;
-    sub_ref_path_ = nh_.subscribe(ref_path_topic, 1, &MPPI::refPathCallback, this);
+    sub_ref_path_ = this->create_subscription<nav_msgs::msg::Path>(ref_path_topic, rclcpp::QoS(10), std::bind(&MPPI::refPathCallback, this, _1));
     ref_path_received_ = false;
-    sub_collision_costmap_ = nh_.subscribe(collision_costmap_topic, 1, &MPPI::collisionCostmapCallback, this);
+    sub_collision_costmap_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(collision_costmap_topic, rclcpp::QoS(10), std::bind(&MPPI::collisionCostmapCallback, this, _1));
     collision_costmap_received_ = false;
-    sub_distance_error_map_ = nh_.subscribe(distance_error_map_topic, 1, &MPPI::distanceErrorMapCallback, this);
+    sub_distance_error_map_ = this->create_subscription<grid_map_msgs::msg::GridMap>(distance_error_map_topic, rclcpp::QoS(10), std::bind(&MPPI::distanceErrorMapCallback, this, _1));
     distance_error_map_received_ = false;
-    sub_ref_yaw_map_ = nh_.subscribe(ref_yaw_map_topic, 1, &MPPI::refYawMapCallback, this);
+    sub_ref_yaw_map_ = this->create_subscription<grid_map_msgs::msg::GridMap>(ref_yaw_map_topic, rclcpp::QoS(10), std::bind(&MPPI::refYawMapCallback, this, _1));
     ref_yaw_map_received_ = false;
 
     // initialize publishers
-    pub_cmd_vel_ = nh_.advertise<geometry_msgs::Twist>(control_cmd_vel_topic, 1);
-    pub_cmd_absvel_ = nh_.advertise<std_msgs::Float32>(mppi_absvel_topic, 1);
-    pub_cmd_vx_ = nh_.advertise<std_msgs::Float32>(mppi_vx_topic, 1);
-    pub_cmd_vy_ = nh_.advertise<std_msgs::Float32>(mppi_vy_topic, 1);
-    pub_cmd_omega_ = nh_.advertise<std_msgs::Float32>(mppi_omega_topic, 1);
-    pub_mppi_calc_time_ = nh_.advertise<std_msgs::Float32>(calc_time_topic, 1);
-    pub_mppi_overlay_text_ = nh_.advertise<jsk_rviz_plugins::OverlayText>(mppi_overlay_text_topic, 1);
-    pub_mppi_optimal_traj_ = nh_.advertise<visualization_msgs::MarkerArray>(mppi_optimal_traj_topic, 1);
-    pub_mppi_sampled_traj_ = nh_.advertise<visualization_msgs::MarkerArray>(mppi_sampled_traj_topic, 1);
-    pub_mppi_eval_msg_ = nh_.advertise<mppi_eval_msgs::MPPIEval>(mppi_eval_msg_topic, 1);
+    pub_cmd_vel_ = this->create_publisher<geometry_msgs::msg::Twist>(control_cmd_vel_topic, rclcpp::QoS(10));
+    pub_cmd_absvel_ = this->create_publisher<std_msgs::msg::Float32>(mppi_absvel_topic, rclcpp::QoS(10));
+    pub_cmd_vx_ = this->create_publisher<std_msgs::msg::Float32>(mppi_vx_topic, rclcpp::QoS(10));
+    pub_cmd_vy_ = this->create_publisher<std_msgs::msg::Float32>(mppi_vy_topic, rclcpp::QoS(10));
+    pub_cmd_omega_ = this->create_publisher<std_msgs::msg::Float32>(mppi_omega_topic, rclcpp::QoS(10));
+    pub_mppi_calc_time_ = this->create_publisher<std_msgs::msg::Float32>(calc_time_topic, rclcpp::QoS(10));
+    pub_mppi_overlay_text_ = this->create_publisher<visualization_msgs::msg::Marker>(mppi_overlay_text_topic, rclcpp::QoS(10));
+    pub_mppi_optimal_traj_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(mppi_optimal_traj_topic, rclcpp::QoS(10));
+    pub_mppi_sampled_traj_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(mppi_sampled_traj_topic, rclcpp::QoS(10));
+    pub_mppi_eval_msg_ = this->create_publisher<mppi_eval_msgs::msg::MPPIEval>(mppi_eval_msg_topic, rclcpp::QoS(10));
 
     // initialize timer
-    timer_control_interval_ = private_nh_.createTimer(ros::Duration(param_common.controller.control_interval), &MPPI::calcControlCommand, this);
+    timer_control_interval_ = this->create_wall_timer(std::chrono::duration<double>(param_common.controller.control_interval), std::bind(&MPPI::calcControlCommand, this));
 
     // instantiate MPPIHybridCore class
     mppi_hybrid_core_ = new MPPIHybridCore(std::make_tuple(param_common, param_mode1, param_mode2));
@@ -132,7 +160,7 @@ MPPI::~MPPI()
 }
 
 // callback to update odometry (global vehicle pose)
-void MPPI::odomCallback(const nav_msgs::Odometry::ConstPtr& msg)
+void MPPI::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
 {
     odom_received_ = true;
     latest_odom_ = *msg;
@@ -145,7 +173,7 @@ void MPPI::odomCallback(const nav_msgs::Odometry::ConstPtr& msg)
     // check if NaN is included
     if (std::isnan(latest_x) || std::isnan(latest_y) || std::isnan(latest_yaw))
     {
-        ROS_WARN("NaN is included in the received odometry");
+        RCLCPP_WARN(this->get_logger(), "NaN is included in the received odometry");
         return;
     }
 
@@ -157,7 +185,7 @@ void MPPI::odomCallback(const nav_msgs::Odometry::ConstPtr& msg)
 }
 
 // callback to update reference path
-void MPPI::refPathCallback(const nav_msgs::Path::ConstPtr& msg)
+void MPPI::refPathCallback(const nav_msgs::msg::Path::SharedPtr msg)
 {
     ref_path_received_ = true;
     latest_ref_path_ = *msg;
@@ -170,7 +198,7 @@ void MPPI::refPathCallback(const nav_msgs::Path::ConstPtr& msg)
 }
 
 // callback to update local costmap callback
-void MPPI::collisionCostmapCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg)
+void MPPI::collisionCostmapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
 {
     collision_costmap_received_ = true;
 
@@ -179,7 +207,7 @@ void MPPI::collisionCostmapCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg
 }
 
 // callback to update distance error map
-void MPPI::distanceErrorMapCallback(const grid_map_msgs::GridMap::ConstPtr& msg)
+void MPPI::distanceErrorMapCallback(const grid_map_msgs::msg::GridMap::SharedPtr msg)
 {
     distance_error_map_received_ = true;
 
@@ -188,7 +216,7 @@ void MPPI::distanceErrorMapCallback(const grid_map_msgs::GridMap::ConstPtr& msg)
 }
 
 // callback to update reference yaw map
-void MPPI::refYawMapCallback(const grid_map_msgs::GridMap::ConstPtr& msg)
+void MPPI::refYawMapCallback(const grid_map_msgs::msg::GridMap::SharedPtr msg)
 {
     ref_yaw_map_received_ = true;
 
@@ -197,12 +225,12 @@ void MPPI::refYawMapCallback(const grid_map_msgs::GridMap::ConstPtr& msg)
 }
 
 // callback to calculate control command
-void MPPI::calcControlCommand(const ros::TimerEvent& event)
+void MPPI::calcControlCommand()
 {
     // check if all necessary data are received, and return if not.
     if (!odom_received_ || !ref_path_received_ || !collision_costmap_received_ || !distance_error_map_received_ || !ref_yaw_map_received_)
     {
-        ROS_WARN("[MPPI] not all necessary data are received, odom: %d, ref_path: %d, collision_costmap: %d, distance_error_map: %d, ref_yaw_map: %d", \
+        RCLCPP_WARN(this->get_logger(), "[MPPI] not all necessary data are received, odom: %d, ref_path: %d, collision_costmap: %d, distance_error_map: %d, ref_yaw_map: %d", \
         odom_received_, ref_path_received_, collision_costmap_received_, distance_error_map_received_, ref_yaw_map_received_);
         return;
     }
@@ -218,11 +246,11 @@ void MPPI::calcControlCommand(const ros::TimerEvent& event)
     );
 
     // publish optimal control command as Twist message
-    geometry_msgs::Twist cmd_vel;
+    geometry_msgs::msg::Twist cmd_vel;
     cmd_vel.linear.x = optimal_cmd.vx;
     cmd_vel.linear.y = optimal_cmd.vy;
     cmd_vel.angular.z = optimal_cmd.omega;
-    pub_cmd_vel_.publish(cmd_vel);
+    pub_cmd_vel_->publish(cmd_vel);
 
     // publish rviz markers for visualization
     //// publish optimal trajectory
@@ -232,27 +260,27 @@ void MPPI::calcControlCommand(const ros::TimerEvent& event)
     publishSampledTrajectories(mppi_hybrid_core_->getEliteSampledTrajectories(100)); // visualize top 100 sampled trajectories
 
     // publish mppi calculation time
-    std_msgs::Float32 calc_time;
+    std_msgs::msg::Float32 calc_time;
     calc_time.data = mppi_hybrid_core_->getCalcTime();
-    pub_mppi_calc_time_.publish(calc_time);
+    pub_mppi_calc_time_->publish(calc_time);
 
     // publish overlay text
     publishOverlayText(mppi_hybrid_core_->getControllerName());
 
     // publish velocity command info
-    std_msgs::Float32 absvel, vx, vy, omega;
+    std_msgs::msg::Float32 absvel, vx, vy, omega;
     absvel.data = sqrt(pow(optimal_cmd.vx, 2) + pow(optimal_cmd.vy, 2));
     vx.data = optimal_cmd.vx;
     vy.data = optimal_cmd.vy;
     omega.data = optimal_cmd.omega;
-    pub_cmd_absvel_.publish(absvel);
-    pub_cmd_vx_.publish(vx);
-    pub_cmd_vy_.publish(vy);
-    pub_cmd_omega_.publish(omega);
+    pub_cmd_absvel_->publish(absvel);
+    pub_cmd_vx_->publish(vx);
+    pub_cmd_vy_->publish(vy);
+    pub_cmd_omega_->publish(omega);
 
     // publish mppi evaluation info
-    mppi_eval_msgs::MPPIEval mppi_eval_msg;
-    mppi_eval_msg.header.stamp = ros::Time::now();
+    mppi_eval_msgs::msg::MPPIEval mppi_eval_msg;
+    mppi_eval_msg.header.stamp = this->now().to_builtin_time();
     mppi_eval_msg.header.frame_id = mppi_hybrid_core_->getControllerName();
     mppi_eval_msg.state_cost = mppi_hybrid_core_->getStateCost();
     mppi_eval_msg.global_x = observed_state_.x;
@@ -272,7 +300,7 @@ void MPPI::calcControlCommand(const ros::TimerEvent& event)
     mppi_eval_msg.cmd_rotor_rr = optimal_vehicle_cmd.rotor_rr;
     mppi_eval_msg.calc_time_ms = mppi_hybrid_core_->getCalcTime();
     mppi_eval_msg.goal_reached = mppi_hybrid_core_->isGoalReached();
-    pub_mppi_eval_msg_.publish(mppi_eval_msg);
+    pub_mppi_eval_msg_->publish(mppi_eval_msg);
 }
 
 // publish rviz markers to visualize optimal trajectory with arrow markers
@@ -287,7 +315,7 @@ void MPPI::publishOptimalTrajectory(const std::vector<common_type::XYYaw>& optim
     double arrow_color[4] = {1.0, 0.0, 0.0, 1.0};
 
     // create marker array
-    visualization_msgs::MarkerArray marker_array;
+    visualization_msgs::msg::MarkerArray marker_array;
     // get number of time steps
     int T = optimal_xyyaw_sequence.size();
     marker_array.markers.resize(T);
@@ -302,11 +330,11 @@ void MPPI::publishOptimalTrajectory(const std::vector<common_type::XYYaw>& optim
         q.setRPY(0.0, 0.0, yaw); // Note: assume roll and pitch angles are zero
 
         marker_array.markers[t].header.frame_id = "map";
-        marker_array.markers[t].header.stamp = ros::Time::now();
+        marker_array.markers[t].header.stamp = this->now().to_builtin_time();
         marker_array.markers[t].ns = "optimal_trajectory";
         marker_array.markers[t].id = t;
-        marker_array.markers[t].type = visualization_msgs::Marker::ARROW;
-        marker_array.markers[t].action = visualization_msgs::Marker::ADD;
+        marker_array.markers[t].type = visualization_msgs::msg::Marker::ARROW;
+        marker_array.markers[t].action = visualization_msgs::msg::Marker::ADD;
         marker_array.markers[t].pose.position.x = x;
         marker_array.markers[t].pose.position.y = y;
         marker_array.markers[t].pose.position.z = MARKER_POS_Z;
@@ -324,7 +352,7 @@ void MPPI::publishOptimalTrajectory(const std::vector<common_type::XYYaw>& optim
     }
 
     // publish rviz markers
-    pub_mppi_optimal_traj_.publish(marker_array);
+    pub_mppi_optimal_traj_->publish(marker_array);
 }
 
 // publish rviz markers to visualize sampled trajectories
@@ -345,19 +373,19 @@ void MPPI::publishSampledTrajectories(const std::vector<std::vector<common_type:
     int T = sampled_state_sequences[0].size();
 
     // create marker array
-    visualization_msgs::MarkerArray marker_array;
+    visualization_msgs::msg::MarkerArray marker_array;
     marker_array.markers.resize(K);
 
     // for each sampled state sequence, add an line strip marker
     for (int k = 0; k < K; k++)
     {
-        visualization_msgs::Marker line;
+        visualization_msgs::msg::Marker line;
         line.header.frame_id = "map";
-        line.header.stamp = ros::Time::now();
+        line.header.stamp = this->now().to_builtin_time();
         line.ns = "sampled_trajectories";
         line.id = k;
-        line.type = visualization_msgs::Marker::LINE_STRIP;
-        line.action = visualization_msgs::Marker::ADD;
+        line.type = visualization_msgs::msg::Marker::LINE_STRIP;
+        line.action = visualization_msgs::msg::Marker::ADD;
         line.pose.orientation.x = 0.0;
         line.pose.orientation.y = 0.0;
         line.pose.orientation.z = 0.0;
@@ -367,7 +395,7 @@ void MPPI::publishSampledTrajectories(const std::vector<std::vector<common_type:
         line.color.g = line_color[1];
         line.color.b = line_color[2];
         line.color.a = line_color[3];
-        line.lifetime = ros::Duration(line_lifetime);
+        line.lifetime = rclcpp::Duration::from_seconds(line_lifetime);
         line.points.resize(T);
 
         // for each time step, add a point to the line strip marker
@@ -383,38 +411,29 @@ void MPPI::publishSampledTrajectories(const std::vector<std::vector<common_type:
     }
 
     // publish rviz markers
-    pub_mppi_sampled_traj_.publish(marker_array);
+    pub_mppi_sampled_traj_->publish(marker_array);
 }
 
 // publish overlay text for visualization on rviz
 void MPPI::publishOverlayText(const std::string& text)
 {
-    jsk_rviz_plugins::OverlayText text_msg;
-    text_msg.action = jsk_rviz_plugins::OverlayText::ADD;
-    text_msg.width = 500;
-    text_msg.height = 50;
-    text_msg.left = 0;
-    text_msg.top = 50;
-
-    std_msgs::ColorRGBA color1, color2;
-    color1.r = 0;
-    color1.g = 0;
-    color1.b = 0;
-    color1.a = 0.4;
-    text_msg.bg_color = color1;
-
-    color2.r = 25.0 / 255;
-    color2.g = 255.0 / 255;
-    color2.b = 240.0 / 255;
-    color2.a = 0.8;
-    text_msg.fg_color = color2;
-
-    text_msg.line_width = 1;
-    text_msg.text_size = 22;
-    text_msg.font = "Ubuntu Mono";
-    text_msg.text = text;
-
-    pub_mppi_overlay_text_.publish(text_msg);
+    visualization_msgs::msg::Marker text_marker;
+    text_marker.header.frame_id = "map";
+    text_marker.header.stamp = this->now().to_builtin_time();
+    text_marker.ns = "mppi_text";
+    text_marker.id = 0;
+    text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+    text_marker.action = visualization_msgs::msg::Marker::ADD;
+    text_marker.pose.position.x = 0.0;
+    text_marker.pose.position.y = 0.0;
+    text_marker.pose.position.z = 1.5;
+    text_marker.scale.z = 0.3;
+    text_marker.color.r = 25.0 / 255;
+    text_marker.color.g = 255.0 / 255;
+    text_marker.color.b = 240.0 / 255;
+    text_marker.color.a = 0.8;
+    text_marker.text = text;
+    pub_mppi_overlay_text_->publish(text_marker);
 }
 
 } // namespace controller_mppi_h
