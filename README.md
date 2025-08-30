@@ -60,8 +60,8 @@ If you use this work in an academic context, please cite the following publicati
 
 1. Build the Humble image and start the container.
     ```
-    make setup_docker
-    make run_docker
+    make setup_docker_humble
+    make run_docker_humble
     ```
 
 1. Inside the container, build the migrated ROS 2 packages.
@@ -148,13 +148,13 @@ Note: At this stage, only the `mppi_eval_msgs` and `groundtruth_odom_publisher` 
 1. Run for the first time setup to build the docker image.
     ```
     cd <path to your workspace>/mppi_swerve_drive_ros
-    make setup_docker
+    make setup_docker_noetic
     ```
 
 1. Launch the docker container and get into the bash inside.
     ```
     cd <path to your workspace>/mppi_swerve_drive_ros
-    make run_docker
+    make run_docker_noetic
     ```
 
 1. [Inside the docker container] Build the project.
