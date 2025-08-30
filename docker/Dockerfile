@@ -1,17 +1,17 @@
 # rich base image
-FROM osrf/ros:noetic-desktop-full
+FROM osrf/ros:humble-desktop
 
-# install catkin tools first
+# install development tools
 RUN apt update && apt install -y \
-    python3-catkin-tools \ 
+    python3-colcon-common-extensions \
     bash-completion \
     htop
 
 # copy project to container temporarily for installing dependencies
 COPY src /home/src
-RUN /bin/bash -c "source /opt/ros/noetic/setup.bash && \
-    rosdep update --rosdistro=noetic && \
-    rosdep install -y --from-paths /home/src --ignore-src --rosdistro noetic"
+RUN /bin/bash -c "source /opt/ros/humble/setup.bash && \
+    rosdep update --rosdistro=humble && \
+    rosdep install -y --from-paths /home/src --ignore-src --rosdistro humble"
 
 # install dependencies
 COPY Makefile /home/Makefile

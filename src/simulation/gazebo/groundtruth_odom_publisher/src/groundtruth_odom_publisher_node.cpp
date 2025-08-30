@@ -1,9 +1,11 @@
 #include "groundtruth_odom_publisher/groundtruth_odom_publisher.hpp"
+#include <rclcpp/rclcpp.hpp>
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "groundtruth_odom_publisher");
-    gazebo::GroundTruthOdomPublisher groundtruth_odom_publisher;
-    ros::spin();
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<gazebo::GroundTruthOdomPublisher>();
+    rclcpp::spin(node);
+    rclcpp::shutdown();
     return 0;
 };

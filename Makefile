@@ -5,35 +5,40 @@ WORKSPACE=$(shell pwd)
 .PHONY: build # to avoid error
 
 build:
-	source /opt/ros/noetic/setup.bash &&\
-	export CC=clang-11 && export CXX=clang++-11 &&\
-	catkin build --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O2"
+	@if [ -f install/setup.bash ]; then \
+		source /opt/ros/humble/setup.bash && \
+		colcon build --symlink-install; \
+	else \
+		echo "No colcon workspace yet. Creating..."; \
+		source /opt/ros/humble/setup.bash && \
+		colcon build --symlink-install; \
+	fi
 
 clean:
-	rm -r build devel logs .catkin_tools
+	rm -rf build install log .catkin_tools devel logs
 
 install_deps: # install packages which are not supported by rosdep
 	apt update && apt install -y \
 	psmisc clang-11
 
 setup_docker:
-	docker build -t noetic_image:latest -f docker/Dockerfile . --no-cache
+	docker build -t humble_image:latest -f docker/Dockerfile . --no-cache
 
 exec_docker:
-	docker exec -it noetic_container /bin/bash
+	docker exec -it humble_container /bin/bash
 
 run_rocker:
-	rocker --x11 --user --network host --privileged --nocleanup --volume .:/home/$(shell whoami)/mppi_swerve_drive_ros --name noetic_container noetic_image:latest
+	rocker --x11 --user --network host --privileged --nocleanup --volume .:/home/$(shell whoami)/mppi_swerve_drive_ros --name humble_container humble_image:latest
 
 run_docker:
-	@if [ "$(shell docker inspect --format='{{.State.Status}}' noetic_container)" = "running" ]; then \
+	@if [ "$(shell docker inspect --format='{{.State.Status}}' humble_container)" = "running" ]; then \
 		$(MAKE) exec_docker; \
-	elif [ "$(shell docker inspect --format='{{.State.Status}}' noetic_container)" = "exited" ]; then \
-		docker start noetic_container; \
-		if [$? -eq 0]; then \
+	elif [ "$(shell docker inspect --format='{{.State.Status}}' humble_container)" = "exited" ]; then \
+		docker start humble_container; \
+		if [$$? -eq 0]; then \
 			$(MAKE) exec_docker; \
 		else \
-			docker rm noetic_container; \
+			docker rm humble_container; \
 			$(MAKE) run_rocker; \
 		fi; \
 	else \
@@ -48,20 +53,17 @@ record:
 ## [shell 1] make play
 ## [shell 2] rosbag play rosbag/xxx.bag
 play:
-	source /opt/ros/noetic/setup.bash && source ./devel/setup.bash &&\
-	roslaunch launch/rosbag_play.launch workspace:=${WORKSPACE}
+	source /opt/ros/humble/setup.bash &&\
+	ros2 bag play rosbag/*.db3
 
 # gazebo_world.launch
 gazebo_world:
-	source /opt/ros/noetic/setup.bash && source ./devel/setup.bash &&\
-	roslaunch launch/gazebo_world.launch
+	@echo "Port gazebo launch to ROS 2 first."
 
 # gmapping.launch
 gmapping:
-	source /opt/ros/noetic/setup.bash && source ./devel/setup.bash &&\
-	roslaunch launch/gmapping.launch workspace:=${WORKSPACE}
+	@echo "Gmapping not ported to ROS 2 in this workspace."
 
 # navigation.launch
 navigation:
-	source /opt/ros/noetic/setup.bash && source ./devel/setup.bash &&\
-	roslaunch launch/navigation.launch workspace:=${WORKSPACE}
+	@echo "Navigation launch not yet ported to ROS 2."

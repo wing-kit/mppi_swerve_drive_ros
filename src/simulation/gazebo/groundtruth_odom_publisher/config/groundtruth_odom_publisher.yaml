@@ -1,3 +1,5 @@
-base_frame: base_link
-odom_frame: odom
-groundtruth_topic: /groundtruth_odom
+groundtruth_odom_publisher:
+  ros__parameters:
+    base_frame: base_link
+    odom_frame: odom
+    groundtruth_odom_topic: /groundtruth_odom
