@@ -11,3 +11,4 @@ echo "[ -f ~/mppi_swerve_drive_ros/install/setup.bash ] && source ~/mppi_swerve_
 echo "source /etc/bash_completion" >> ~/.bashrc
 ## run command
 exec "$@"
+

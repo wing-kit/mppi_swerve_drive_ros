@@ -40,7 +40,88 @@ If you use this work in an academic context, please cite the following publicati
 
 ## Setup
 
-### [Option 1] Docker environment
+### ROS 2 Humble (recommended)
+
+#### Option A: Docker
+
+<details>
+<summary>CLICK HERE TO EXPAND</summary>
+
+1. Prerequisites
+    - [docker](https://docs.docker.com/engine/install/)
+    - [rocker](https://github.com/osrf/rocker)
+
+1. Clone the project repository.
+    ```
+    cd <path to your workspace>
+    git clone https://github.com/MizuhoAOKI/mppi_swerve_drive_ros
+    cd mppi_swerve_drive_ros
+    ```
+
+1. Build the Humble image and start the container.
+    ```
+    make setup_docker_humble
+    make run_docker_humble
+    ```
+
+1. Inside the container, build the migrated ROS 2 packages.
+    ```bash
+    cd ~/mppi_swerve_drive_ros
+    source /opt/ros/humble/setup.bash
+    colcon build --packages-select mppi_eval_msgs groundtruth_odom_publisher --symlink-install
+    source install/setup.bash
+    ```
+
+1. Run a sample ROS 2 launch (TF from ground-truth odom).
+    ```bash
+    ros2 launch groundtruth_odom_publisher groundtruth_odom_publisher.launch.py
+    ```
+
+Optional: override parameters
+```bash
+ros2 launch groundtruth_odom_publisher groundtruth_odom_publisher.launch.py \
+  params_file:=`ros2 pkg prefix groundtruth_odom_publisher`/share/groundtruth_odom_publisher/config/groundtruth_odom_publisher.yaml
+```
+
+Note: At this stage, only the `mppi_eval_msgs` and `groundtruth_odom_publisher` packages are ROS 2 Humble-ready. Other packages remain ROS 1 and will be ported next.
+
+</details>
+
+#### Option B: Native (Ubuntu 22.04 + ROS 2 Humble)
+
+<details>
+<summary>CLICK HERE TO EXPAND</summary>
+
+1. Prerequisites
+    - Ubuntu 22.04
+    - [ROS 2 Humble](https://docs.ros.org/en/humble/Installation.html)
+    - colcon and rosdep (usually installed with desktop setup)
+
+1. Clone and install dependencies
+    ```bash
+    cd <path to your workspace>
+    git clone https://github.com/MizuhoAOKI/mppi_swerve_drive_ros
+    cd mppi_swerve_drive_ros
+    sudo rosdep init || true
+    rosdep update
+    rosdep install -y --from-paths src --ignore-src --rosdistro humble
+    ```
+
+1. Build only the migrated ROS 2 packages
+    ```bash
+    source /opt/ros/humble/setup.bash
+    colcon build --packages-select mppi_eval_msgs groundtruth_odom_publisher --symlink-install
+    source install/setup.bash
+    ```
+
+1. Run
+    ```bash
+    ros2 launch groundtruth_odom_publisher groundtruth_odom_publisher.launch.py
+    ```
+
+</details>
+
+### [Option 1] Docker environment (ROS 1 Noetic)
 
 <details>
 <summary>CLICK HERE TO EXPAND</summary>
@@ -67,25 +148,25 @@ If you use this work in an academic context, please cite the following publicati
 1. Run for the first time setup to build the docker image.
     ```
     cd <path to your workspace>/mppi_swerve_drive_ros
-    make setup_docker
+    make setup_docker_noetic
     ```
 
 1. Launch the docker container and get into the bash inside.
     ```
     cd <path to your workspace>/mppi_swerve_drive_ros
-    make run_docker
+    make run_docker_noetic
     ```
 
 1. [Inside the docker container] Build the project.
     ```
     cd ~/mppi_swerve_drive_ros
-    make build
+    make build_humble
     ```
 
 </details>
 
 
-### [Option 2] Native environment
+### [Option 2] Native environment (ROS 1 Noetic)
 
 <details>
 <summary>CLICK HERE TO EXPAND</summary>
@@ -115,7 +196,7 @@ If you use this work in an academic context, please cite the following publicati
 1. Build the project.
     ```
     cd <path to your workspace>/mppi_swerve_drive_ros
-    make build
+    make build_noetic
     ```
 
 </details>  
@@ -123,13 +204,19 @@ If you use this work in an academic context, please cite the following publicati
 
 ## Build
 
-Build the project.
+### ROS 2 Humble
 ```
 cd <path to your workspace>/mppi_swerve_drive_ros
-make build
+make build_humble
 ```
 
-(Optional) Clean the cache before building the project if necessary.
+### ROS 1 Noetic
+```
+cd <path to your workspace>/mppi_swerve_drive_ros
+make build_noetic
+```
+
+(Optional) Clean the cache
 ```
 cd <path to your workspace>/mppi_swerve_drive_ros
 make clean

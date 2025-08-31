@@ -1,24 +1,30 @@
 #include "groundtruth_odom_publisher/groundtruth_odom_publisher.hpp"
+using std::placeholders::_1;
 
 namespace gazebo
 {
 
 // constructor
 GroundTruthOdomPublisher::GroundTruthOdomPublisher()
-    : nh_(""), private_nh_("~")
+    : rclcpp::Node("groundtruth_odom_publisher")
 {
-    // load parameters 
+    // declare and get parameters
+    this->declare_parameter<std::string>("base_frame", "base_link");
+    this->declare_parameter<std::string>("odom_frame", "odom");
+    this->declare_parameter<std::string>("groundtruth_odom_topic", "/groundtruth_odom");
 
-    //// frame names
-    private_nh_.param<std::string>("base_frame", base_frame_name, "base_link");
-    private_nh_.param<std::string>("odom_frame", odom_frame_name, "odom");
+    base_frame_name = this->get_parameter("base_frame").as_string();
+    odom_frame_name = this->get_parameter("odom_frame").as_string();
 
-    //// subscribing topic names
-    std::string groundtruth_odom_topic;
-    private_nh_.param<std::string>("groundtruth_odom_topic", groundtruth_odom_topic, "/groundtruth_odom");
+    // subscribing topic name
+    std::string groundtruth_odom_topic = this->get_parameter("groundtruth_odom_topic").as_string();
 
-    // initialize subscribers
-    sub_groundtruth_odom_ = nh_.subscribe(groundtruth_odom_topic, 1, &GroundTruthOdomPublisher::groundTruthOdomCallback, this);
+    // initialize subscriber
+    sub_groundtruth_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
+        groundtruth_odom_topic, rclcpp::QoS(10), std::bind(&GroundTruthOdomPublisher::groundTruthOdomCallback, this, _1));
+
+    // initialize TF broadcaster
+    tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 }
 
 // destructor
@@ -28,10 +34,10 @@ GroundTruthOdomPublisher::~GroundTruthOdomPublisher()
 }
 
 // /odom topic callback
-void GroundTruthOdomPublisher::groundTruthOdomCallback(const nav_msgs::Odometry::ConstPtr& msg)
+void GroundTruthOdomPublisher::groundTruthOdomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
 {
     // get current time
-    ros::Time time_now_ = ros::Time::now();
+    rclcpp::Time time_now_ = this->now();
 
     // publish tf (avoiding publishing tf with same timestamp repeatedly)
     if(prev_tf_timestamp_ != time_now_)
@@ -40,7 +46,7 @@ void GroundTruthOdomPublisher::groundTruthOdomCallback(const nav_msgs::Odometry:
         prev_tf_timestamp_ = time_now_;
 
         // publish odom tf
-        odom_tf_.header.stamp = time_now_;
+        odom_tf_.header.stamp = time_now_.to_builtin_time();
         odom_tf_.header.frame_id = odom_frame_name;
         odom_tf_.child_frame_id = base_frame_name;
         odom_tf_.transform.translation.x = msg->pose.pose.position.x;
@@ -50,7 +56,7 @@ void GroundTruthOdomPublisher::groundTruthOdomCallback(const nav_msgs::Odometry:
         odom_tf_.transform.rotation.y = msg->pose.pose.orientation.y;
         odom_tf_.transform.rotation.z = msg->pose.pose.orientation.z;
         odom_tf_.transform.rotation.w = msg->pose.pose.orientation.w;
-        tf_broadcaster_.sendTransform(odom_tf_);
+        tf_broadcaster_->sendTransform(odom_tf_);
     }
 }
 
