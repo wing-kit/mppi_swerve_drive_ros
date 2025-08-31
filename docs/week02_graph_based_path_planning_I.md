@@ -524,6 +524,123 @@ Evaluation rubric (brief)
 
 ---
 
+### Appendix A. Step-by-step Dijkstra dry run (textual walk-through)
+We illustrate Dijkstra on a small 5×7 grid, 4-connected, uniform costs. `#` are obstacles.
+
+Text grid (row, col) with start S = (1,1) and goal G = (3,5):
+```
+0: . . . . . . .
+1: . S . # . . .
+2: . # . # . # .
+3: . . . . G . .
+4: . # . . . . .
+```
+
+Dry run highlights (priority queue holds (dist, node)):
+- Init: dist[S]=0; PQ=[(0,(1,1))]
+- Pop (1,1): relax (0,1),(2,1),(1,0),(1,2). Obstacles block (2,1). Push with dist=1.
+- PQ=[(1,(0,1)), (1,(1,0)), (1,(1,2))]
+- Pop (0,1): relax new neighbors; enqueue (0,0),(0,2),(1,1 already closed),(−1,1 out). Distances become 2 for new cells.
+- Continue expansions level-by-level; first time we pop G we have its optimal distance.
+
+Key invariants to note as you trace:
+- When a node u is popped the first time, dist[u] is final (for nonnegative weights).
+- Parent pointers create an acyclic tree rooted at S over finalized nodes.
+
+Exercise: Perform the exact sequence of PQ states for this grid and reconstruct the path S→G. Then repeat with 8-connected neighbors and compare path length.
+
+---
+
+### Appendix B. Preventing diagonal corner-cutting (safety for finite-radius robots)
+In 8-connected grids, naïve diagonal moves can "cut corners" through blocked gaps. A common rule forbids a diagonal move unless at least one of the adjacent orthogonal cells is free (or, stricter, both are free).
+
+Python neighbor variant with a strict rule (both orthogonals free):
+```python
+def neighbors_no_corner_cutting(grid: Grid, node: Index, use_diagonals: bool = False) -> List[Tuple[Index, float]]:
+    r, c = node
+    nbr_offsets = ORTHO_NEIGHBORS + (DIAG_NEIGHBORS if use_diagonals else [])
+    result: List[Tuple[Index, float]] = []
+    for dr, dc in nbr_offsets:
+        nr, nc = r + dr, c + dc
+        if not in_bounds(grid, nr, nc):
+            continue
+        if not is_free(grid, nr, nc):
+            continue
+        if dr != 0 and dc != 0:
+            # Diagonal step: require both adjacent orthogonals to be free
+            if not (is_free(grid, r + dr, c) and is_free(grid, r, c + dc)):
+                continue
+            cost = math.sqrt(2.0)
+        else:
+            cost = 1.0
+        result.append(((nr, nc), cost))
+    return result
+```
+
+When planning for a disk robot of radius R, combine this rule with obstacle inflation by ⌈R/res⌉ cells to maintain physical clearance.
+
+---
+
+### Appendix C. Benchmarking and profiling guidance
+To empirically validate O(N log N) behavior:
+- Fix obstacle densities (e.g., 10%, 30%).
+- Sweep grid sizes: 50×50, 100×100, 200×200, 400×400.
+- For each size/density, generate K random maps, time Dijkstra with/without diagonals, and plot mean runtime vs N.
+
+Skeleton driver (expand in your lab repo):
+```python
+import random, time, statistics as stats
+
+def random_grid(h, w, p):
+    return [[random.random() < p for _ in range(w)] for _ in range(h)]
+
+def bench():
+    sizes = [50, 100, 200, 400]
+    densities = [0.1, 0.3]
+    trials = 5
+    for p in densities:
+        for n in sizes:
+            times = []
+            for _ in range(trials):
+                g = random_grid(n, n, p)
+                s, t = (0, 0), (n-1, n-1)
+                g[s[0]][s[1]] = False; g[t[0]][t[1]] = False
+                t0 = time.perf_counter()
+                _ = dijkstra(g, s, t, use_diagonals=True)
+                times.append(time.perf_counter() - t0)
+            print(f"n={n:3d}, p={p:.1f}, mean={stats.mean(times):.4f}s, stdev={stats.pstdev(times):.4f}s")
+
+if __name__ == "__main__":
+    bench()
+```
+
+Discussion prompts:
+- Why do measured constants differ between 4- and 8-connected cases?
+- How does obstacle density affect the number of relaxed edges before reaching the goal?
+
+---
+
+### Appendix D. Swerve integration steps with this repository
+Bridging grid paths to the MPPI-based swerve stack in this repo:
+
+- Generate waypoints: Convert grid cells to metric using map origin/resolution (see Section 9).
+- Downsample: Reduce to corner waypoints or apply shortcutting for smoother references.
+- Publish or feed to controller: In a ROS 1 Noetic run (see `README.md`), you can launch an autonomous navigation stack:
+  - Manual sim world: `roslaunch launch/gazebo_world.launch gazebo_world_name:=maze`
+  - MPPI navigation: `roslaunch launch/navigation.launch local_planner:=mppi_h`
+- Integration options for this course:
+  - Offline: Save waypoints to CSV and load them in a small node that publishes a reference trajectory topic consumed by MPPI.
+  - Online: Wrap your Dijkstra in a ROS node that subscribes to a costmap/occupancy grid and publishes waypoints whenever S/G changes.
+
+Operational tips for swerve bases:
+- Keep waypoint spacing larger than the chassis footprint to avoid oscillations.
+- Avoid tight zig-zags; prefer 8-connected with corner-cutting prevention and mild downsampling.
+- If MPPI exhibits corner hugging, increase clearance/obstacle cost and/or inflate obstacles in the planning grid.
+
+Visual (text-described): In `maze` world, overlay a red polyline of downsampled waypoints over the grid-free space. The swerve robot follows the polyline while MPPI slightly rounds corners for smooth steering.
+
+---
+
 ### 15. References
 - LaValle, S. M. Planning Algorithms. Chapter 3.
 - Choset, H., Lynch, K. M., Hutchinson, S., et al. Principles of Robot Motion. Chapter 2.
